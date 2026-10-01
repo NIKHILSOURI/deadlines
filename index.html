@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ECEFED" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0D1217" media="(prefers-color-scheme: dark)">
+<meta name="description" content="Deadlines, meetings and conference pipelines in one calendar, synced with Google Calendar.">
+<title>Deadlines</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script>
+  try{ const t = JSON.parse(localStorage.getItem('dt3') || '{}')?.settings?.theme; if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; }catch(e){}
+</script>
+</head>
+<body>
+<div class="app boot">
+  <header class="top">
+    <div class="brand"><div class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" class="i"><path d="M12 3v3M4.5 7.5l2 2M19.5 7.5l-2 2"/><circle cx="12" cy="14" r="7"/><path d="M12 14V10.5M12 14l2.5 1.5"/></svg></div><span>Deadlines</span></div>
+    <div class="hero" id="hero"></div>
+    <div class="topact">
+      <button class="pill" id="syncPill" data-s="local"><span class="dot"></span><span class="lbl" id="syncLbl">On this device</span></button>
+      <button class="iconbtn" id="searchBtn" title="Search (Ctrl K)" aria-label="Search"></button>
+      <button class="iconbtn" id="themeBtn" aria-label="Switch theme"></button>
+      <button class="iconbtn" id="settingsBtn" title="Settings" aria-label="Settings"></button>
+    </div>
+  </header>
+
+  <div class="toolbar">
+    <div class="navgrp">
+      <button class="btn sq" id="prevBtn" aria-label="Previous"></button>
+      <button class="btn" id="todayBtn">Today</button>
+      <button class="btn sq" id="nextBtn" aria-label="Next"></button>
+    </div>
+    <div class="range" id="rangeTitle"></div>
+    <div class="seg" id="viewSeg" role="group" aria-label="View">
+      <button data-view="month" aria-pressed="true">Month</button>
+      <button data-view="week" aria-pressed="false">Week</button>
+      <button data-view="day" aria-pressed="false">Day</button>
+    </div>
+    <div class="addgrp">
+      <button class="btn primary" id="addBtn">New deadline</button>
+      <button class="btn primary caret" id="addMenuBtn" aria-label="More ways to add" aria-haspopup="menu" aria-expanded="false"></button>
+      <div class="menu" id="addMenu" role="menu">
+        <button role="menuitem" data-add="deadline">Deadline <span class="kbd k">N</span></button>
+        <button role="menuitem" data-add="meeting">Meeting <span class="kbd k">M</span></button>
+        <button role="menuitem" data-add="group">Group, like a conference <span class="kbd k">G</span></button>
+      </div>
+    </div>
+  </div>
+
+  <main class="main">
+    <section class="calwrap" id="calwrap" aria-label="Calendar"></section>
+    <aside class="side">
+      <div class="tabs" role="tablist">
+        <button role="tab" data-tab="day" aria-selected="true">Day</button>
+        <button role="tab" data-tab="upcoming" aria-selected="false">Upcoming</button>
+        <button role="tab" data-tab="groups" aria-selected="false">Groups</button>
+      </div>
+      <div class="panel" id="panel"></div>
+    </aside>
+  </main>
+</div>
+<button class="fab" id="fab" aria-label="Add"></button>
+
+<!-- deadline / meeting -->
+<dialog id="entryDlg">
+  <form class="dlg" id="entryForm" novalidate>
+    <div class="seg kindseg" id="kindSeg" role="group" aria-label="Entry type">
+      <button type="button" data-kind="deadline" aria-pressed="true">Deadline</button>
+      <button type="button" data-kind="meeting" aria-pressed="false">Meeting</button>
+    </div>
+    <div class="dlg-body">
+      <input class="bigtitle" name="title" maxlength="200" placeholder="Add a title" autocomplete="off" aria-label="Title">
+      <div data-for="deadline">
+        <div class="grid2">
+          <label class="f">Group <input name="group" list="groupList" placeholder="ICSSP 2027" autocomplete="off"></label>
+          <label class="f">Type <select name="type"></select></label>
+        </div>
+        <div class="grid3">
+          <label class="f">Date <input name="date" type="date"></label>
+          <label class="f">Due time <input name="time" type="time"></label>
+          <label class="f">Time zone <select name="tz"><option value="local">My time</option><option value="AoE">AoE (UTC-12)</option></select></label>
+        </div>
+        <div class="hint" id="dueHint"></div>
+        <label class="chk" id="doneWrap"><input type="checkbox" name="done"> Done</label>
+      </div>
+      <div data-for="meeting" hidden>
+        <label class="f">Calendar <select name="cal"></select></label>
+        <label class="chk"><input type="checkbox" name="allDay"> All day</label>
+        <div class="grid2">
+          <label class="f">Starts <input name="sdate" type="date"></label>
+          <label class="f" data-timed>&nbsp;<input name="stime" type="time"></label>
+          <label class="f">Ends <input name="edate" type="date"></label>
+          <label class="f" data-timed>&nbsp;<input name="etime" type="time"></label>
+        </div>
+        <div class="hint" id="meetHint"></div>
+        <label class="f">Link to group <select name="mgroup"></select></label>
+      </div>
+      <label class="f">Notes <textarea name="notes" rows="3" placeholder="Links, what to show the professor, room"></textarea></label>
+      <div class="hint hot" id="entryErr" role="alert"></div>
+    </div>
+    <div class="actions">
+      <div class="left">
+        <button type="button" class="btn danger" id="entryDel">Delete</button>
+        <button type="button" class="btn" id="entryDup">Duplicate</button>
+        <a class="btn" id="entryOpen" target="_blank" rel="noopener">Open in Google</a>
+      </div>
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+<datalist id="groupList"></datalist>
+
+<!-- group -->
+<dialog id="groupDlg">
+  <form class="dlg" id="groupForm" novalidate>
+    <h3 id="groupTitle">New group</h3>
+    <div class="dlg-body">
+      <div class="grid2">
+        <label class="f">Name <input name="name" maxlength="80" placeholder="ICSSP 2027" autocomplete="off"></label>
+        <label class="f">Kind
+          <select name="kind"><option>Conference</option><option>Journal</option><option>Course</option><option>Project</option><option>Meeting series</option><option>Application</option><option>Other</option></select>
+        </label>
+      </div>
+      <div class="f">Color, shared with Google Calendar <div class="swatches" id="swatches"></div></div>
+      <label class="f">Meeting tag <input name="tag" maxlength="30" placeholder="ICSSP2027" autocomplete="off"></label>
+      <div class="hint">Put <b id="tagEx">#ICSSP2027</b> in a Google Calendar event's description and it shows up in this group.</div>
+      <div class="hint" id="stageHint"></div>
+      <div class="stagehead"><span>Step</span><span>Date</span><span>Time</span><span>Done</span><span></span></div>
+      <div id="stageRows"></div>
+      <button type="button" class="link" id="addStage">Add another step</button>
+      <div class="hint hot" id="groupErr" role="alert"></div>
+    </div>
+    <div class="actions">
+      <div class="left"><button type="button" class="btn danger" id="groupDel">Delete group</button></div>
+      <button type="button" class="btn" data-close>Cancel</button>
+      <button type="submit" class="btn primary">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- settings -->
+<dialog id="settingsDlg">
+  <div class="dlg settings">
+    <h3>Settings</h3>
+    <div class="dlg-body">
+      <section>
+        <h4>Appearance</h4>
+        <div class="seg" id="themeSeg" role="group" aria-label="Theme">
+          <button type="button" data-theme="system">System</button><button type="button" data-theme="light">Light</button><button type="button" data-theme="dark">Dark</button>
+        </div>
+      </section>
+      <section>
+        <h4>Google Calendar</h4>
+        <div class="status" id="gStatus"></div>
+        <div id="gSetup">
+          <p>Paste the OAuth client ID from Google Cloud Console. The setup guide in README.md walks through it.</p>
+          <label class="f">OAuth client ID <input id="clientId" class="in" placeholder="1234567890-abc.apps.googleusercontent.com" autocomplete="off" spellcheck="false"></label>
+          <div class="hint hot" id="gErr" role="alert"></div>
+        </div>
+        <div id="gCals" hidden>
+          <p>Show meetings from these calendars:</p>
+          <div class="callist" id="calList"></div>
+        </div>
+        <div class="rowbtns">
+          <button type="button" class="btn primary" id="gConnect">Connect Google Calendar</button>
+          <button type="button" class="btn" id="gSync" hidden>Sync now</button>
+          <button type="button" class="btn danger" id="gDisconnect" hidden>Disconnect</button>
+        </div>
+      </section>
+      <section>
+        <h4>Deadline reminders in Google Calendar</h4>
+        <p>Google sends these to your phone. Pick up to five.</p>
+        <div class="radios" id="remList"></div>
+      </section>
+      <section>
+        <h4>Defaults</h4>
+        <label class="f">Time zone for new deadlines <select id="defTz" class="in"><option value="local">My time</option><option value="AoE">AoE (UTC-12), common for conferences</option></select></label>
+        <label class="chk"><input type="checkbox" id="notifyChk"> Browser notifications while the tracker is open (morning summary and 1 hour before timed deadlines)</label>
+      </section>
+      <section>
+        <h4>Your data</h4>
+        <p>Back up saves a file you can restore on any device. Restore also accepts backups from the earlier laptop version.</p>
+        <div class="rowbtns">
+          <button type="button" class="btn" id="backupBtn">Back up</button>
+          <button type="button" class="btn" id="restoreBtn">Restore</button>
+          <button type="button" class="btn danger" id="eraseBtn">Erase data on this device</button>
+          <input type="file" id="restoreFile" accept=".json,application/json" hidden>
+        </div>
+      </section>
+      <section>
+        <h4>Keyboard</h4>
+        <div class="keys">
+          <kbd>N</kbd><span>New deadline</span><kbd>M</kbd><span>New meeting</span><kbd>G</kbd><span>New group</span>
+          <kbd>Ctrl K</kbd><span>Search everything</span><kbd>T</kbd><span>Jump to today</span>
+          <kbd>1 2 3</kbd><span>Month, week, day</span><kbd>← →</kbd><span>Previous, next</span>
+        </div>
+      </section>
+    </div>
+    <div class="actions"><span class="hint" style="margin:0 auto 0 0" id="verLbl"></span><button type="button" class="btn primary" data-close>Done</button></div>
+  </div>
+</dialog>
+
+<!-- search -->
+<dialog id="searchDlg" aria-label="Search">
+  <div class="sbox"><span id="searchIco"></span><input id="searchIn" placeholder="Search deadlines, groups, meetings, or type a date" autocomplete="off" aria-label="Search"><span class="kbd">Esc</span></div>
+  <div class="sres" id="searchRes" role="listbox"></div>
+</dialog>
+
+<div class="toasts" id="toasts" aria-live="polite"></div>
+
+<script src="app.js"></script>
+</body>
+</html>
