@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Deadlines widget</title>
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<script>
+  try{ const t = JSON.parse(localStorage.getItem('dt3') || '{}')?.settings?.theme; if (t === 'light' || t === 'dark') document.documentElement.dataset.theme = t; }catch(e){}
+</script>
+<style>
+:root{
+  --bg:#ECEFED; --surface:#FFFFFF; --surface2:#F5F7F6; --sunk:#E4E8E6;
+  --ink:#15202A; --muted:#5B6671; --faint:#8C959D; --line:#D8DEDB; --line2:#C3CBC6;
+  --accent:#3F51B5; --hot:#D13B2F; --warm:#B7791F; --ok:#2E8B57;
+  --hot-bg:#FBE9E7; --warm-bg:#FBF1DE; --ok-bg:#E3F3EA;
+  --body:"IBM Plex Sans",system-ui,"Segoe UI",Roboto,Arial,sans-serif;
+  --cond:"IBM Plex Sans Condensed","Arial Narrow","Segoe UI",system-ui,sans-serif;
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){ :root:not([data-theme="light"]){
+  --bg:#0D1217; --surface:#151B22; --surface2:#19212A; --sunk:#10161C; --ink:#E5EBE9; --muted:#97A2AC; --faint:#66727D;
+  --line:#242E38; --line2:#33404C; --accent:#8C9EFF; --hot:#FF6B5E; --warm:#F0B357; --ok:#5DCB8F;
+  --hot-bg:#3A1C1A; --warm-bg:#352A15; --ok-bg:#16301F; color-scheme:dark; } }
+:root[data-theme="dark"]{
+  --bg:#0D1217; --surface:#151B22; --surface2:#19212A; --sunk:#10161C; --ink:#E5EBE9; --muted:#97A2AC; --faint:#66727D;
+  --line:#242E38; --line2:#33404C; --accent:#8C9EFF; --hot:#FF6B5E; --warm:#F0B357; --ok:#5DCB8F;
+  --hot-bg:#3A1C1A; --warm-bg:#352A15; --ok-bg:#16301F; color-scheme:dark; }
+*{box-sizing:border-box}
+html,body{margin:0;height:100%}
+body{background:var(--bg);color:var(--ink);font:13.5px/1.45 var(--body);-webkit-font-smoothing:antialiased;display:flex;flex-direction:column;overflow:hidden}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+svg.i{width:16px;height:16px;flex:none;stroke:currentColor;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+
+/* top bar */
+.bar{display:flex;align-items:center;gap:8px;padding:12px 14px 8px}
+.date{flex:1;min-width:0}
+.date b{display:block;font:700 22px/1.05 var(--cond);letter-spacing:-.01em}
+.date span{font-size:12px;color:var(--muted)}
+.ib{width:32px;height:32px;display:grid;place-items:center;border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:0}
+.ib:hover{background:var(--surface2);border-color:var(--line2)}
+.ib.spin svg{animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.sync{display:flex;align-items:center;gap:6px;font-size:11.5px;color:var(--muted);padding:0 14px 8px}
+.sync .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+.sync[data-s=ok] .dot{background:var(--ok)} .sync[data-s=syncing] .dot{background:var(--accent);animation:pulse 1s infinite}
+.sync[data-s=offline] .dot,.sync[data-s=signin] .dot{background:var(--warm)} .sync[data-s=error] .dot{background:var(--hot)}
+.sync button{margin-left:auto;border:0;background:var(--ink);color:var(--bg);border-radius:7px;padding:3px 9px;font-size:11.5px;font-weight:600}
+@keyframes pulse{50%{opacity:.35}}
+
+.scroll{flex:1;overflow:auto;padding:0 12px 12px}
+
+/* countdown */
+.hero{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--surface);border-radius:14px;padding:11px 13px 12px;margin-bottom:10px;position:relative;overflow:hidden}
+.hero::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--c,var(--accent))}
+.hero .k{font-size:11px;color:var(--muted)}
+.hero .t{display:block;font-weight:600;font-size:14.5px;margin:1px 0 6px;overflow-wrap:anywhere}
+.clock{display:flex;align-items:baseline;gap:1px;font:700 30px/1 var(--cond);font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+.clock small{font:500 12px var(--body);color:var(--muted);margin:0 7px 0 2px}
+.hero.hot .clock{color:var(--hot)} .hero.warm .clock{color:var(--warm)}
+.hero .when{font-size:12px;color:var(--muted);margin-top:4px}
+
+/* sections */
+h2{display:flex;align-items:center;gap:6px;font:600 11.5px/1 var(--body);color:var(--muted);margin:14px 2px 7px;text-transform:none}
+h2 .n{margin-left:auto;font-weight:500;color:var(--faint)}
+h2.hot{color:var(--hot)}
+.issue{display:flex;gap:8px;font-size:12.5px;border-radius:10px;padding:7px 9px;margin-bottom:5px;background:var(--hot-bg);border:1px solid color-mix(in srgb,var(--hot) 30%,transparent)}
+.issue svg{color:var(--hot);margin-top:1px}
+.issue.warm{background:var(--warm-bg);border-color:color-mix(in srgb,var(--warm) 35%,transparent)} .issue.warm svg{color:var(--warm)}
+.issue b{font-weight:600}
+.card{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.it{display:grid;grid-template-columns:22px minmax(0,1fr) auto;gap:9px;align-items:center;padding:8px 10px;border-top:1px solid var(--line);position:relative}
+.it:first-child{border-top:0}
+.it.past{opacity:.55}
+.it .tt{font-weight:500;overflow-wrap:anywhere;display:block}
+.it .sub{display:flex;flex-wrap:wrap;gap:0 8px;font-size:11.5px;color:var(--muted)}
+.it .tm{font:600 12.5px/1.2 var(--cond);font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
+.it .tm small{display:block;font:400 10.5px var(--body);color:var(--muted)}
+.it.done .tt{text-decoration:line-through;color:var(--muted)}
+.mk{width:10px;height:10px;border-radius:50%;border:2.5px solid var(--c);justify-self:center}
+.ck{width:18px;height:18px;border:2px solid var(--line2);border-radius:6px;background:none;padding:0;display:grid;place-items:center;justify-self:center;transition:background .15s,border-color .15s}
+.ck svg{width:12px;height:12px;stroke-width:3;opacity:0;transform:scale(.4);transition:all .18s}
+.ck:hover{border-color:var(--ink)}
+.it.done .ck{background:var(--ok);border-color:var(--ok);color:#fff} .it.done .ck svg{opacity:1;transform:none}
+.gdot{display:inline-flex;align-items:center;gap:4px;color:var(--ink)}
+.gdot::before{content:"";width:7px;height:7px;border-radius:2px;background:var(--c)}
+.badge{display:inline-flex;align-items:center;gap:3px;font-size:10.5px;font-weight:600;border-radius:5px;padding:0 5px}
+.badge svg{width:10px;height:10px}
+.badge.hot{background:var(--hot-bg);color:var(--hot)} .badge.mute{background:var(--sunk);color:var(--muted)}
+.now{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:var(--hot);padding:0 10px;height:0;position:relative;z-index:1}
+.now::after{content:"";flex:1;border-top:2px solid var(--hot)}
+.now span{background:var(--surface);padding:0 4px 0 0;transform:translateY(-1px)}
+.empty{font-size:12.5px;color:var(--muted);padding:12px;text-align:center}
+.day{font:600 12.5px var(--cond);color:var(--ink);padding:7px 10px 5px;background:var(--surface2);border-top:1px solid var(--line);display:flex;justify-content:space-between}
+.day:first-child{border-top:0}
+.day span{font:400 11px var(--body);color:var(--muted)}
+
+/* quick add */
+.add{border-top:1px solid var(--line);background:var(--surface);padding:9px 12px 10px}
+.add .row1{display:flex;gap:6px}
+.add input,.add select{background:var(--surface2);border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:13px;min-width:0}
+.add input:focus,.add select:focus{outline:none;border-color:var(--accent)}
+.add .title{flex:1}
+.add .go{border:0;background:var(--ink);color:var(--bg);border-radius:8px;padding:0 12px;font-weight:600}
+.add .row2{display:grid;grid-template-columns:1.2fr 1fr 82px;gap:6px;margin-top:6px}
+.add .row2[hidden]{display:none}
+.add .err{font-size:11.5px;color:var(--hot);margin-top:4px;min-height:0}
+.foot{display:flex;gap:6px;justify-content:space-between;align-items:center;padding:7px 12px 9px;font-size:11.5px;color:var(--muted);background:var(--surface);border-top:1px solid var(--line)}
+.foot a,.foot button{color:var(--muted);text-decoration:underline;text-underline-offset:2px;border:0;background:none;padding:0;font-size:11.5px}
+.foot a:hover,.foot button:hover{color:var(--ink)}
+.setup{margin:10px 0;padding:14px;border:1px dashed var(--line2);border-radius:12px;font-size:13px;color:var(--muted)}
+.setup a{display:inline-block;margin-top:8px;background:var(--ink);color:var(--bg);border-radius:8px;padding:6px 12px;text-decoration:none;font-weight:600}
+.toast{position:fixed;left:12px;right:12px;bottom:118px;background:var(--ink);color:var(--bg);border-radius:10px;padding:8px 12px;font-size:12.5px;display:flex;gap:10px;align-items:center;animation:tin .25s ease-out;z-index:9}
+.toast button{margin-left:auto;background:none;border:0;color:var(--bg);font-weight:700;text-decoration:underline;padding:0}
+@keyframes tin{from{opacity:0;transform:translateY(8px)}}
+.fresh{animation:fresh .5s ease-out}
+@keyframes fresh{from{background:color-mix(in srgb,var(--accent) 18%,transparent)}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+</head>
+<body>
+  <div class="bar">
+    <div class="date"><b id="dToday"></b><span id="dClock"></span></div>
+    <button class="ib" id="refresh" title="Sync now" aria-label="Sync now"></button>
+    <a class="ib" id="openApp" href="./" target="_blank" rel="noopener" title="Open the full app" aria-label="Open the full app"></a>
+  </div>
+  <div class="sync" id="sync" data-s="local"><span class="dot"></span><span id="syncTxt">Loading</span></div>
+  <div class="scroll" id="main"></div>
+  <form class="add" id="add" autocomplete="off">
+    <div class="row1">
+      <input class="title" name="title" placeholder="Add a deadline" maxlength="200" aria-label="New deadline title">
+      <button class="go" type="submit">Add</button>
+    </div>
+    <div class="row2" id="addMore" hidden>
+      <select name="group" aria-label="Group"></select>
+      <input name="date" type="date" aria-label="Date">
+      <input name="time" type="time" aria-label="Due time">
+    </div>
+    <div class="err" id="addErr" role="alert"></div>
+  </form>
+  <div class="foot"><span id="footInfo"></span><button type="button" id="snap" title="Move this window to the right edge of the screen">Snap to right edge</button></div>
+
+<script>
+(() => {
+'use strict';
+/* This widget shares data and the Google connection with the main app (same site, same storage keys).
+   It only writes deadlines (done, quick add). Meetings and groups are edited in the main app. */
+const KEY = 'dt3', AUTH_KEY = 'dt3-auth', PLACED = 'dt3-widget-placed';
+const API = 'https://www.googleapis.com/calendar/v3', SCOPE = 'https://www.googleapis.com/auth/calendar', CONFIG_ID = 'dtconfig00';
+const DAY = 864e5, HOUR = 36e5, MIN = 6e4;
+const GCOLORS = {1:'#7986CB',2:'#33B679',3:'#8E24AA',4:'#E67C73',5:'#F6BF26',6:'#F4511E',7:'#039BE5',8:'#616161',9:'#3F51B5',10:'#0B8043',11:'#D50000'};
+const FOOTER_RE = /\n*\[Deadline Tracker[^\]]*\]\s*$/;
+const ICON = {
+  sync:'<path d="M20 11a8 8 0 0 0-14.6-4.5L4 8M4 4v4h4M4 13a8 8 0 0 0 14.6 4.5L20 16M20 20v-4h-4"/>',
+  open:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  check:'<path d="M5 12.5l4.5 4.5L19 7.5"/>', alert:'<path d="M12 3l9.5 17h-19z"/><path d="M12 10v4M12 17.5v.01"/>',
+  flag:'<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>', cal:'<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M3 10h18M8 3v4M16 3v4"/>'
+};
+const ic = n => `<svg viewBox="0 0 24 24" class="i" aria-hidden="true">${ICON[n]}</svg>`;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const parseD = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const addDays = (s, n) => { const d = parseD(s); d.setDate(d.getDate() + n); return iso(d); };
+const diffDays = (a, b) => Math.round((parseD(a) - parseD(b)) / DAY);
+const todayISO = () => iso(new Date());
+const fmtT = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const fmtD = (s, o) => parseD(s).toLocaleDateString('en-GB', o || { weekday:'short', day:'numeric', month:'short' });
+const plural = (n, w) => `${n} ${w}${n === 1 ? '' : 's'}`;
+const B32 = '0123456789abcdefghijklmnopqrstuv';
+const genId = () => { let s = 'dt'; for (const x of crypto.getRandomValues(new Uint8Array(22))) s += B32[x & 31]; return s; };
+
+/* ---------- shared storage: always read fresh, write right away ---------- */
+function read(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.v === 3) return s; }catch(e){} return null; }
+function write(s){ try{ localStorage.setItem(KEY, JSON.stringify(s)); }catch(e){ toast('Could not save on this device.'); } }
+let S = read();
+function update(fn){ const s = read() || S; if (!s) return; fn(s); write(s); S = s; }
+function enqueueIn(s, op){ const k = op.t + ':' + (op.id || ''); s.queue = (s.queue || []).filter(q => (q.t + ':' + (q.id || '')) !== k); s.queue.push(op); }
+
+/* ---------- same rules as the main app ---------- */
+const G = id => (S?.groups || []).find(g => g.id === id) || { id:'', name:'General', color:8 };
+const gcol = c => GCOLORS[c] || GCOLORS[8];
+function dueAt(d){
+  const [y, m, dd] = d.date.split('-').map(Number);
+  if (!d.time) return new Date(y, m - 1, dd, 23, 59, 59);
+  const [h, mi] = d.time.split(':').map(Number);
+  return d.tz === 'AoE' ? new Date(Date.UTC(y, m - 1, dd, h + 12, mi)) : new Date(y, m - 1, dd, h, mi);
+}
+const dueDay = d => d.time ? iso(dueAt(d)) : d.date;
+const mStart = m => m.allDay ? parseD(m.sd).getTime() : +new Date(m.start);
+const mEnd = m => m.allDay ? parseD(m.ed).getTime() : Math.max(+new Date(m.end), +new Date(m.start) + 15 * MIN);
+function meetingsOn(day){ const ds = parseD(day).getTime(), de = ds + DAY; return (S?.meetings || []).filter(m => mStart(m) < de && mEnd(m) > ds); }
+function meetingGroup(m){ const t = ((m.desc || '') + ' ' + (m.title || '')).toLowerCase(); return (S?.groups || []).find(g => g.tag && t.includes('#' + g.tag.toLowerCase())); }
+const mColor = m => { const g = meetingGroup(m); return g ? gcol(g.color) : (m.colorId ? gcol(m.colorId) : (S?.settings?.calMeta?.[m.calId]?.color || '#039BE5')); };
+function dayIssues(day){
+  const ds = parseD(day).getTime(), de = ds + DAY;
+  const timed = meetingsOn(day).filter(m => !m.allDay), out = [];
+  for (let i = 0; i < timed.length; i++) for (let j = i + 1; j < timed.length; j++){
+    const a = timed[i], b = timed[j], s = Math.max(mStart(a), mStart(b)), e = Math.min(mEnd(a), mEnd(b));
+    if (e > s && s >= ds && s < de) out.push({ kind:'overlap', ids:[a.id, b.id], html:`<b>${esc(a.title)}</b> overlaps <b>${esc(b.title)}</b>, ${fmtT(new Date(s))} to ${fmtT(new Date(e))}.` });
+  }
+  const dls = (S?.deadlines || []).filter(d => !d.done && dueDay(d) === day);
+  dls.filter(d => d.time).forEach(d => {
+    const t = +dueAt(d), m = timed.find(m => mStart(m) <= t && mEnd(m) > t);
+    if (m) out.push({ kind:'during', ids:[d.id], html:`<b>${esc(d.title)}</b> is due ${fmtT(dueAt(d))}, during <b>${esc(m.title)}</b>. Finish before ${fmtT(new Date(mStart(m)))}.` });
+  });
+  if (dls.length){
+    const mins = timed.reduce((a, m) => a + (Math.min(mEnd(m), de) - Math.max(mStart(m), ds)) / MIN, 0);
+    if (mins >= 240) out.push({ kind:'busy', ids:[], html:`${plural(Math.round(mins / 60), 'hour')} of meetings on a deadline day.` });
+  }
+  return out;
+}
+
+/* ---------- Google ---------- */
+let auth = {}, syncing = false, status = 'local', statusMsg = '', gisP = null;
+const readAuth = () => { try{ auth = JSON.parse(localStorage.getItem(AUTH_KEY)) || {}; }catch(e){ auth = {}; } };
+const hasToken = () => { readAuth(); return auth.token && Date.now() < (auth.exp || 0) - MIN; };
+function loadGIS(){
+  if (gisP) return gisP;
+  gisP = new Promise((res, rej) => {
+    if (window.google?.accounts?.oauth2) return res();
+    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true;
+    s.onload = res; s.onerror = () => { gisP = null; rej(new Error('offline')); }; document.head.appendChild(s);
+  });
+  return gisP;
+}
+function requestToken(interactive){
+  return loadGIS().then(() => new Promise((res, rej) => {
+    const timer = setTimeout(() => rej(new Error('timeout')), interactive ? 120000 : 12000);
+    const tc = google.accounts.oauth2.initTokenClient({
+      client_id: S.settings.clientId, scope: SCOPE,
+      callback: r => { clearTimeout(timer); if (r.error) return rej(new Error(r.error));
+        auth = { token: r.access_token, exp: Date.now() + (Number(r.expires_in) || 3600) * 1000 };
+        try{ localStorage.setItem(AUTH_KEY, JSON.stringify(auth)); }catch(e){} res(); },
+      error_callback: e => { clearTimeout(timer); rej(new Error(e?.type || 'failed')); }
+    });
+    tc.requestAccessToken({ prompt: interactive ? '' : 'none', login_hint: S.settings.email || undefined });
+  }));
+}
+class ApiError extends Error { constructor(st, m){ super(m); this.status = st; } }
+async function gapi(method, path, { body, params } = {}){
+  const url = new URL(API + path);
+  if (params) Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) url.searchParams.append(k, v); });
+  let r;
+  try{ r = await fetch(url, { method, headers: { Authorization: 'Bearer ' + auth.token, ...(body ? { 'Content-Type':'application/json' } : {}) }, body: body ? JSON.stringify(body) : undefined }); }
+  catch(e){ throw new ApiError(0, 'offline'); }
+  if (r.status === 401){ try{ localStorage.removeItem(AUTH_KEY); }catch(e){} auth = {}; throw new ApiError(401, 'signin'); }
+  if (r.status === 204) return null;
+  const j = await r.json().catch(() => null);
+  if (!r.ok) throw new ApiError(r.status, j?.error?.message || ('Google returned ' + r.status));
+  return j;
+}
+async function listAll(path, params){ let items = [], pageToken; do { const j = await gapi('GET', path, { params: { ...params, pageToken, maxResults: 2500 } }); items = items.concat(j.items || []); pageToken = j.nextPageToken; } while (pageToken); return items; }
+const encCal = id => '/calendars/' + encodeURIComponent(id);
+
+function deadlineToEvent(d){
+  const g = G(d.groupId), start = {}, end = {};
+  if (d.time){ const t = dueAt(d); start.dateTime = t.toISOString(); end.dateTime = new Date(+t + 15 * MIN).toISOString(); }
+  else { start.date = d.date; end.date = addDays(d.date, 1); }
+  return { summary: (d.done ? '✓ ' : '') + `[${g.name}] ${d.title}`,
+    description: (d.notes ? d.notes + '\n\n' : '') + `[Deadline Tracker: ${d.type}${d.tz === 'AoE' && d.time ? ', due ' + d.time + ' AoE' : ''}]`,
+    start, end, transparency:'transparent', colorId: String(g.color || 8), status:'confirmed',
+    reminders: { useDefault:false, overrides: d.done ? [] : (S.settings.reminders || [4320,1440]).slice(0, 5).map(m => ({ method:'popup', minutes:m })) },
+    extendedProperties: { private: { dt:'1', g: d.groupId || '', ty: d.type, dn: d.done ? '1' : '0', tz: d.tz || 'local', up: String(d.updated || Date.now()) } } };
+}
+function eventToDeadline(ev, groups){
+  const p = ev.extendedProperties?.private || {};
+  const d = { id: ev.id, groupId: p.g || '', type: p.ty || 'Task', tz: p.tz === 'AoE' ? 'AoE' : 'local', done: p.dn === '1', updated: Number(p.up) || 0 };
+  d.title = String(ev.summary || '').replace(/^✓\s*/, '').replace(/^\[[^\]]*\]\s*/, '') || 'Untitled';
+  d.notes = String(ev.description || '').replace(FOOTER_RE, '').trim();
+  if (ev.start?.date){ d.date = ev.start.date; d.time = ''; }
+  else { const t = new Date(ev.start.dateTime);
+    if (d.tz === 'AoE'){ const a = new Date(+t - 12 * HOUR); d.date = `${a.getUTCFullYear()}-${pad(a.getUTCMonth() + 1)}-${pad(a.getUTCDate())}`; d.time = `${pad(a.getUTCHours())}:${pad(a.getUTCMinutes())}`; }
+    else { d.date = iso(t); d.time = fmtT(t); } }
+  if (!groups.some(g => g.id === d.groupId)){
+    const m = String(ev.summary || '').match(/^(?:✓\s*)?\[([^\]]+)\]/);
+    const g = m && groups.find(x => x.name.toLowerCase() === m[1].toLowerCase()); if (g) d.groupId = g.id;
+  }
+  return d;
+}
+function eventToMeeting(ev, calId, calMeta){
+  const role = calMeta[calId]?.role;
+  const m = { id: ev.id, calId, title: ev.summary || '(No title)', desc: ev.description || '', colorId: ev.colorId ? Number(ev.colorId) : 0,
+    link: ev.htmlLink || '', editable: ['owner','writer'].includes(role) && (!ev.organizer || ev.organizer.self || ev.guestsCanModify === true),
+    recurring: !!ev.recurringEventId, attendees: (ev.attendees || []).length, meet: ev.hangoutLink || '', location: ev.location || '' };
+  if (ev.start?.date){ m.allDay = true; m.sd = ev.start.date; m.ed = ev.end?.date || addDays(ev.start.date, 1); }
+  else { m.allDay = false; m.start = ev.start.dateTime; m.end = ev.end?.dateTime || ev.start.dateTime; }
+  return m;
+}
+async function upsertEvent(calId, id, body){
+  try{ return await gapi('PATCH', `${encCal(calId)}/events/${id}`, { body }); }
+  catch(e){ if (e.status !== 404 && e.status !== 410) throw e;
+    try{ return await gapi('POST', `${encCal(calId)}/events`, { body: { ...body, id } }); }
+    catch(e2){ if (e2.status === 409) return gapi('PATCH', `${encCal(calId)}/events/${id}`, { body }); throw e2; } }
+}
+
+/* send waiting deadline changes. Other kinds of changes are left for the main app. */
+async function flushDeadlines(){
+  const cal = S.settings.deadlineCalId;
+  for (const op of (read()?.queue || []).filter(q => q.t === 'd')){
+    try{
+      const d = (read()?.deadlines || []).find(x => x.id === op.id);
+      if (d) await upsertEvent(cal, d.id, deadlineToEvent(d));
+      else { try{ await gapi('DELETE', `${encCal(cal)}/events/${op.id}`); }catch(e){ if (![404, 410].includes(e.status)) throw e; } }
+      update(s => { s.queue = s.queue.filter(q => !(q.t === 'd' && q.id === op.id)); });
+    }catch(e){
+      if (e.status === 0 || e.status === 401 || e.status === 429 || e.status >= 500) throw e;
+      update(s => { s.queue = s.queue.filter(q => !(q.t === 'd' && q.id === op.id)); });
+    }
+  }
+}
+async function pull(){
+  const st = read() || S, set = st.settings, cal = set.deadlineCalId;
+  let groups = null, gUpdated = 0;
+  try{ const cfg = await gapi('GET', `${encCal(cal)}/events/${CONFIG_ID}`); const j = cfg && cfg.status !== 'cancelled' ? JSON.parse(cfg.description || '{}') : null; if (j && Array.isArray(j.groups)){ groups = j.groups; gUpdated = j.updated || 0; } }
+  catch(e){ if (![404, 410].includes(e.status)) throw e; }
+  const evs = await listAll(`${encCal(cal)}/events`, { privateExtendedProperty:'dt=1', singleEvents:true, showDeleted:false, timeMin: new Date(Date.now() - 400 * DAY).toISOString() });
+  const a = addDays(todayISO(), -2), b = addDays(todayISO(), 16);
+  let meets = [];
+  for (const c of set.calendars || []){
+    const list = await listAll(`${encCal(c)}/events`, { singleEvents:true, orderBy:'startTime', timeMin: parseD(a).toISOString(), timeMax: parseD(b).toISOString(), showDeleted:false });
+    list.filter(e => e.status !== 'cancelled' && !['workingLocation','birthday'].includes(e.eventType) && !e.extendedProperties?.private?.dt).forEach(e => meets.push(eventToMeeting(e, c, set.calMeta || {})));
+  }
+  // merge into the latest stored state, keeping anything still waiting to be sent
+  update(s => {
+    const hasCfg = (s.queue || []).some(q => q.t === 'cfg');
+    if (groups && !hasCfg && gUpdated > (s.groupsUpdated || 0)){ s.groups = groups; s.groupsUpdated = gUpdated; }
+    const pd = new Set((s.queue || []).filter(q => q.t === 'd').map(q => q.id));
+    const pm = new Set((s.queue || []).filter(q => q.t === 'm').map(q => q.id));
+    s.deadlines = evs.filter(e => e.status !== 'cancelled' && !pd.has(e.id)).map(e => eventToDeadline(e, s.groups)).concat(s.deadlines.filter(d => pd.has(d.id)));
+    const keepOld = s.meetRange && s.meetRange[0] < a ? s.meetings.filter(m => !pm.has(m.id) && (mEnd(m) <= parseD(a).getTime() || mStart(m) >= parseD(b).getTime())) : [];
+    s.meetings = meets.filter(m => !pm.has(m.id)).concat(keepOld, s.meetings.filter(m => pm.has(m.id)));
+    s.meetRange = s.meetRange && s.meetRange[0] < a && s.meetRange[1] > b ? s.meetRange : [a, b];
+    s.lastSync = Date.now();
+  });
+}
+function setStatus(s, msg){ status = s; statusMsg = msg || ''; paintStatus(); }
+async function sync({ interactive = false } = {}){
+  S = read();
+  if (!S || !S.settings?.connected || !S.settings.deadlineCalId || !S.settings.clientId){ setStatus('local'); render(); return; }
+  if (syncing) return;
+  if (!navigator.onLine){ setStatus('offline'); return; }
+  syncing = true; setStatus('syncing');
+  try{
+    if (!hasToken()){
+      try{ await requestToken(interactive); }
+      catch(e){ setStatus(e.message === 'offline' ? 'offline' : 'signin'); return; }
+    }
+    await flushDeadlines();
+    await pull();
+    S = read(); render();
+    setStatus(S.queue.some(q => q.t === 'd') ? 'offline' : 'ok');
+  }catch(e){
+    setStatus(e.status === 401 ? 'signin' : e.status === 0 ? 'offline' : 'error', e.message);
+  }finally{ syncing = false; $('#refresh').classList.remove('spin'); }
+}
+
+/* ---------- rendering ---------- */
+let freshId = null, heroId = null;
+function nextDeadline(){ const now = Date.now(); return (S?.deadlines || []).filter(d => !d.done && +dueAt(d) > now).sort((a, b) => +dueAt(a) - +dueAt(b))[0]; }
+function itemD(d, showDay){
+  const g = G(d.groupId), at = dueAt(d), late = !d.done && +at < Date.now();
+  const tm = d.time ? `${fmtT(at)}<small>${d.tz === 'AoE' ? d.time + ' AoE' : 'due'}</small>` : `<small>any time</small>`;
+  return `<div class="it${d.done ? ' done' : ''}${d.id === freshId ? ' fresh' : ''}" data-d="${d.id}">
+    <button class="ck" data-act="done" aria-label="${d.done ? 'Mark not done' : 'Mark done'}">${ic('check')}</button>
+    <span><span class="tt">${esc(d.title)}</span><span class="sub"><span class="gdot" style="--c:${gcol(g.color)}">${esc(g.name)}</span>${showDay ? `<span>${fmtD(dueDay(d))}</span>` : ''}${late ? '<span class="badge hot">late</span>' : ''}</span></span>
+    <span class="tm">${tm}</span></div>`;
+}
+function itemM(m, day, clash){
+  const s = new Date(mStart(m)), e = new Date(mEnd(m)), past = +e < Date.now();
+  const from = !m.allDay && iso(s) !== day, cont = !m.allDay && iso(new Date(+e - 1)) !== day;
+  const g = meetingGroup(m);
+  const tm = m.allDay ? '<small>all day</small>' : `${from ? '<small>from ' + s.toLocaleDateString('en-GB', { weekday:'short' }) + '</small>' : fmtT(s)}<small>to ${fmtT(e)}${cont ? ' ' + e.toLocaleDateString('en-GB', { weekday:'short' }) : ''}</small>`;
+  return `<div class="it${past ? ' past' : ''}"><span class="mk" style="--c:${mColor(m)}"></span>
+    <span><span class="tt">${esc(m.title)}</span><span class="sub">${g ? `<span class="gdot" style="--c:${gcol(g.color)}">${esc(g.name)}</span>` : ''}${m.attendees > 1 ? `<span>${plural(m.attendees, 'guest')}</span>` : ''}${clash ? `<span class="badge hot">${ic('alert')}overlap</span>` : ''}${cont ? '<span class="badge mute">continues</span>' : ''}</span></span>
+    <span class="tm">${tm}</span></div>`;
+}
+function dayList(day, withNow){
+  const issues = dayIssues(day), clash = new Set(issues.filter(i => i.kind === 'overlap').flatMap(i => i.ids));
+  const rows = (S.deadlines || []).filter(d => dueDay(d) === day).map(d => ({ at: d.time ? +dueAt(d) : parseD(day).getTime() + DAY - 1, html: itemD(d) }))
+    .concat(meetingsOn(day).map(m => ({ at: m.allDay ? parseD(day).getTime() - 1 : Math.max(mStart(m), parseD(day).getTime()), html: itemM(m, day, clash.has(m.id)) })))
+    .sort((a, b) => a.at - b.at);
+  const n = rows.length;
+  if (withNow){ const now = Date.now(); const i = rows.findIndex(r => r.at > now); if (n && i !== 0) rows.splice(i < 0 ? n : i, 0, { html: `<div class="now"><span>now ${fmtT(new Date())}</span></div>` }); }
+  return { html: rows.map(r => r.html).join(''), n, issues };
+}
+function render(){
+  const now = new Date();
+  $('#dToday').textContent = now.toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'long' });
+  const main = $('#main');
+  if (!S || !S.settings?.connected){
+    main.innerHTML = `<div class="setup">${ic('cal')} The widget uses the same Google connection as your main app. Open the main app on this browser, connect Google Calendar in Settings, then come back here.<br><a href="./" target="_blank" rel="noopener">Open the main app</a></div>`;
+    $('#add').hidden = true; paintStatus(); return;
+  }
+  $('#add').hidden = false;
+  const t = todayISO();
+  let h = '';
+  const nd = nextDeadline();
+  if (nd){ const g = G(nd.groupId); h += `<button class="hero" id="hero" data-d="${nd.id}" style="--c:${gcol(g.color)}"><span class="k">Next deadline, ${esc(g.name)}</span><span class="t">${esc(nd.title)}</span><span class="clock" id="clock"></span><div class="when">${dueAt(nd).toLocaleDateString('en-GB', { weekday:'long', day:'numeric', month:'short' })}${nd.time ? ' at ' + fmtT(dueAt(nd)) : ', any time'}${nd.tz === 'AoE' && nd.time ? ' (' + nd.time + ' AoE)' : ''}</div></button>`; heroId = nd.id; }
+  else heroId = null;
+  const od = (S.deadlines || []).filter(d => !d.done && +dueAt(d) < Date.now() && dueDay(d) !== t).sort((a, b) => +dueAt(a) - +dueAt(b));
+  if (od.length) h += `<h2 class="hot">${ic('alert')}Overdue<span class="n">${od.length}</span></h2><div class="card">${od.map(d => itemD(d, true)).join('')}</div>`;
+  const today = dayList(t, true);
+  h += `<h2>${ic('flag')}Today<span class="n">${today.n || ''}</span></h2>`;
+  h += today.issues.map(i => `<div class="issue${i.kind === 'busy' ? ' warm' : ''}">${ic('alert')}<span>${i.html}</span></div>`).join('');
+  h += `<div class="card">${today.n ? today.html : '<div class="empty">Nothing today. Enjoy the focus time.</div>'}</div>`;
+  let week = '';
+  for (let k = 1; k <= 7; k++){
+    const day = addDays(t, k), l = dayList(day, false);
+    if (!l.n) continue;
+    const warn = l.issues.filter(i => i.kind !== 'busy').length;
+    week += `<div class="day">${k === 1 ? 'Tomorrow' : fmtD(day, { weekday:'long' })} <span>${fmtD(day, { day:'numeric', month:'short' })}${warn ? ', ' + plural(warn, 'warning') : ''}</span></div>${l.html}`;
+  }
+  h += `<h2>${ic('cal')}Next 7 days</h2><div class="card">${week || '<div class="empty">A clear week ahead.</div>'}</div>`;
+  main.innerHTML = h;
+  tick();
+  // quick-add groups
+  const sel = $('#add [name=group]'), cur = sel.value;
+  sel.innerHTML = (S.groups || []).map(g => `<option value="${g.id}">${esc(g.name)}</option>`).join('');
+  if (cur && (S.groups || []).some(g => g.id === cur)) sel.value = cur;
+  const open = (S.deadlines || []).filter(d => !d.done).length;
+  document.title = (od.length ? `(${od.length} overdue) ` : '') + 'Deadlines widget';
+  $('#footInfo').textContent = `${plural(open, 'open deadline')}`;
+}
+function tick(){
+  $('#dClock').textContent = new Date().toLocaleTimeString('en-GB', { hour:'2-digit', minute:'2-digit' });
+  const d = heroId && (S?.deadlines || []).find(x => x.id === heroId), c = $('#clock'), hero = $('#hero');
+  if (!d || !c) return;
+  let ms = +dueAt(d) - Date.now();
+  if (ms <= 0){ render(); return; }
+  const dd = Math.floor(ms / DAY); ms -= dd * DAY; const hh = Math.floor(ms / HOUR); ms -= hh * HOUR; const mm = Math.floor(ms / MIN); const ss = Math.floor((ms - mm * MIN) / 1000);
+  hero.className = 'hero' + (dd < 2 ? ' hot' : dd < 7 ? ' warm' : '');
+  c.innerHTML = (dd ? `${dd}<small>d</small>` : '') + `${pad(hh)}<small>h</small>${pad(mm)}<small>m</small>` + (dd ? '' : `${pad(ss)}<small>s</small>`);
+}
+function paintStatus(){
+  const el = $('#sync'); el.dataset.s = status;
+  const ago = S?.lastSync ? Math.round((Date.now() - S.lastSync) / MIN) : null;
+  const waiting = (S?.queue || []).filter(q => q.t === 'd').length;
+  const txt = { local:'Not connected', syncing:'Syncing with Google Calendar', ok: ago === null ? 'Synced' : ago < 1 ? 'Synced just now' : `Synced ${ago} min ago`,
+    offline:`Offline${waiting ? ', ' + plural(waiting, 'change') + ' waiting' : ''}. Showing saved data.`, signin:'Google needs you to sign in', error:'Sync problem: ' + statusMsg }[status];
+  el.innerHTML = `<span class="dot"></span><span>${esc(txt)}</span>${status === 'signin' ? '<button type="button" id="signin">Sign in</button>' : status === 'error' || status === 'offline' ? '<button type="button" id="retry">Retry</button>' : ''}`;
+}
+
+/* ---------- actions ---------- */
+let toastT;
+function toast(msg, undo){
+  document.querySelector('.toast')?.remove();
+  const el = document.createElement('div'); el.className = 'toast'; el.innerHTML = `<span>${esc(msg)}</span>`;
+  if (undo){ const b = document.createElement('button'); b.textContent = 'Undo'; b.onclick = () => { undo(); el.remove(); }; el.appendChild(b); }
+  document.body.appendChild(el); clearTimeout(toastT); toastT = setTimeout(() => el.remove(), undo ? 6000 : 3500);
+}
+function setDone(id, val){
+  update(s => { const d = s.deadlines.find(x => x.id === id); if (!d) return; d.done = val; d.updated = Date.now(); enqueueIn(s, { t:'d', id }); });
+  render(); sync();
+}
+$('#main').addEventListener('click', e => {
+  if (e.target.closest('[data-act=done]')){
+    const id = e.target.closest('[data-d]').dataset.d, d = S.deadlines.find(x => x.id === id); if (!d) return;
+    const v = !d.done; setDone(id, v); toast(v ? 'Done. Nice work.' : 'Marked not done.', () => setDone(id, !v));
+    return;
+  }
+  if (e.target.closest('#hero')) window.open('./', '_blank', 'noopener');
+});
+document.addEventListener('click', e => {
+  if (e.target.id === 'signin') sync({ interactive: true });
+  if (e.target.id === 'retry') sync({ interactive: true });
+});
+const add = $('#add');
+add.title.addEventListener('focus', () => { $('#addMore').hidden = false; if (!add.date.value) add.date.value = todayISO(); });
+add.title.addEventListener('input', () => $('#addErr').textContent = '');
+add.addEventListener('submit', e => {
+  e.preventDefault();
+  const title = add.title.value.trim();
+  if (!title){ $('#addErr').textContent = 'Type what is due first.'; add.title.focus(); return; }
+  if (!add.date.value){ $('#addErr').textContent = 'Pick a date.'; add.date.focus(); return; }
+  const id = genId();
+  const d = { id, title, groupId: add.group.value || '', type:'Task', date: add.date.value, time: add.time.value, tz: add.time.value ? (S.settings.defaultTz || 'local') : 'local', notes:'', done:false, updated: Date.now() };
+  update(s => { s.deadlines.push(d); enqueueIn(s, { t:'d', id }); });
+  freshId = id; add.title.value = ''; add.time.value = '';
+  render(); sync();
+  toast(`Added for ${fmtD(dueDay(d))}.`, () => { update(s => { s.deadlines = s.deadlines.filter(x => x.id !== id); enqueueIn(s, { t:'d', id }); }); render(); sync(); });
+});
+$('#refresh').innerHTML = ic('sync'); $('#openApp').innerHTML = ic('open');
+$('#refresh').onclick = () => { $('#refresh').classList.add('spin'); sync({ interactive: true }); };
+
+/* place the window on the right edge the first time (works in app windows opened by the launcher) */
+function snap(){
+  try{
+    const w = Math.min(430, screen.availWidth), h = screen.availHeight - 16;
+    window.resizeTo(w, h); window.moveTo(screen.availLeft + screen.availWidth - w - 8, screen.availTop + 8);
+    localStorage.setItem(PLACED, '1');
+  }catch(e){}
+}
+$('#snap').onclick = snap;
+if (!localStorage.getItem(PLACED)) setTimeout(snap, 300);
+
+/* keep in step with the main app and with Google */
+addEventListener('storage', e => { if (e.key === KEY){ S = read(); render(); paintStatus(); } });
+addEventListener('online', () => sync());
+addEventListener('offline', () => setStatus('offline'));
+addEventListener('focus', () => { if (S?.lastSync && Date.now() - S.lastSync > MIN) sync(); });
+document.addEventListener('visibilitychange', () => { if (!document.hidden) sync(); });
+setInterval(tick, 1000);
+let lastDay = todayISO();
+setInterval(() => { if (todayISO() !== lastDay){ lastDay = todayISO(); } if (!document.activeElement?.closest?.('#add')) render(); paintStatus(); }, 60000);
+setInterval(() => sync(), 3 * MIN);
+
+render(); paintStatus();
+sync();   // sync as soon as the widget opens
+})();
+</script>
+</body>
+</html>
